@@ -1,85 +1,214 @@
-# Devialet Expert - experimental Home Assistant integration
+# Devialet Expert for Home Assistant
 
-Native `media_player` for the pre-Core-Infinity Expert UDP protocol, based on
-[devimote](https://github.com/gnulabis/devimote). No cloud, GUI or Python package
-dependency. Installed and validated in Home Assistant through HACS.
+An unofficial, local Home Assistant integration for Devialet Expert amplifiers
+using the pre-Core-Infinity Expert UDP protocol. Based on
+[gnulabis/devimote](https://github.com/gnulabis/devimote).
 
-## HACS installation
+Control power, volume, mute and input selection, with live amplifier readback
+and a dedicated volume slider in **dB**. No cloud account or external Python
+package is required.
 
-Repository: https://github.com/rzomerman/ha-devialet-expert
+![Devialet Expert amplifier](custom_components/devialet_expert/brand/expert.png)
 
-1. In HACS, open the menu -> Custom repositories.
-2. Add the repository URL above, type **Integration**.
-3. Find **Devialet Expert**, then download it.
-4. Restart Home Assistant.
-5. Settings -> Devices & services -> Add integration -> **Devialet Expert**.
-6. Enter the amplifier's IPv4 address. Leave read-only enabled initially.
+> **Experimental integration, not an official Devialet product.**
+> Volume controls span **-96.5 to +30 dB** with no reduced-volume safety ceiling.
+> High volume can damage speakers or hearing. Start low and increase carefully.
 
-HACS installs the files and manages updates; the Devices & services step creates
-the actual media-player entity. This is a custom HACS repository, not a listing
-in the default HACS catalog. The repository must be public and contain these
-files before it can be installed. No release archive is required: HACS can use
-the default branch. Tagged GitHub releases are recommended after HA validation.
+## Features
 
-## Safety and behavior
+| Feature | Behavior |
+| --- | --- |
+| Power | Switch the amplifier on or off; state follows its broadcasts |
+| Volume | Full -96.5 to +30 dB range, in 0.5 dB steps |
+| dB slider | Separate native number entity with actual dB values |
+| Mute | Read and control mute state |
+| Inputs | Select inputs advertised by the amplifier |
+| Live status | Power, input, mute and volume from CRC-valid UDP broadcasts |
+| Artwork | Bundled amplifier picture served locally by Home Assistant |
+| Read-only mode | Enabled by default; blocks all amplifier commands |
 
-- Setup is **read-only by default**, including direct service calls.
-- The configured IPv4 address is pinned: another amplifier cannot redirect commands.
-- Only CRC-valid status frames update state. Both observed 345-byte frames and
-  documented 512-byte frames are accepted. Corrupt/short frames are logged.
-- State becomes unavailable after 10 seconds without valid broadcasts.
-- Readback is `(raw - 195) / 2` dB, calibrated from the user's physical readings.
-- HA's 0..1 slider maps **-96.5..+30 dB** across the full requested range.
-  The current dB reading is available in `volume_db`; percentages are a linear
-  position in this range, not a percentage of amplifier output power.
-  Readings outside this range remain visible in `volume_db`; the slider saturates.
-- A separate **Volume** number entity provides a native **dB slider**, from
-  -96.5 to +30 dB in 0.5 dB steps. Use its entity details or `number.set_value`
-  with a dB value directly. HA's built-in media-player slider still displays
-  percentages; its labels cannot be changed by the integration.
-  The number entity shares confirmed amplifier readback with the media player
-  and is unavailable while read-only mode is enabled.
-- Every command path rejects out-of-range/nonfinite values. Volume steps are 0.5 dB.
-- No optimistic state updates. A command waits up to 5 seconds for subsequent
-  status matching the requested value, or raises a visible HA service error.
-  This is observed-state confirmation, not a protocol acknowledgement.
-- There is **no reduced-volume safety ceiling**. Power-on and source changes
-  are not blocked based on the current volume. High volume can damage speakers
-  or hearing; start low and increase carefully. The earlier -28 dB ceiling
-  was removed in version 0.1.2 at the user's request.
-- Writes are experimental. A separately approved live volume test with this client
-  confirmed -40.0 -> -40.5 dB from a subsequent CRC-valid status packet.
-  The user subsequently confirmed HA power, volume, mute and source controls
-  work. Zero and positive-volume encoding is checked offline against devimote;
-  no high-volume commands were sent during the full-range update.
-  Unit tests of encoding alone are NOT proof of device acceptance.
-- No play/pause/seek features: the amplifier is a receiver, not a playback source.
-- The media-player entity includes bundled Devialet Expert artwork by default,
-  including while powered off. HA serves the image locally; no external image
-  host or dashboard customization is required.
-- One entry/listener; do not run another process bound to UDP 45454 alongside it.
+This is an amplifier/receiver integration, not a playback source. It does not
+provide play, pause, track selection or seeking.
 
-## Install
+## Compatibility and requirements
 
-Copy `custom_components/devialet_expert` into HA's `/config/custom_components/`.
-Restart HA, then Settings -> Devices & services -> Add integration ->
-Devialet Expert. Enter your amplifier's IPv4 address; leave read-only enabled.
+- Home Assistant **2026.9.0 or newer**.
+- An amplifier exposing the legacy Expert UDP protocol used by devimote.
+  Compatibility with other firmware, models or Core Infinity protocols is not
+  established.
+- The amplifier's IPv4 address, preferably reserved in DHCP.
+- Network access for amplifier broadcasts to reach Home Assistant on
+  **UDP 45454**, and commands to reach the amplifier on **UDP 45455**.
+- **One amplifier per Home Assistant instance.** The listener owns UDP 45454.
 
-The amplifier must broadcast to HA's network. UDP 45454 must reach the HA host
-(Docker requires host networking or suitable broadcast handling). If setup retries
-with "No Devialet status", check amplifier power, Wi-Fi, VLANs and firewall rules.
-An IP ping alone does not verify UDP delivery. The local Windows passive probe
-successfully read Devialet-WIFI, Apple TV and -40.0 dB from a 345-byte packet
-after an initial timeout. After the approved quieter test it reported -40.5 dB.
+The integration has been installed and verified in Home Assistant 2026.9.4.
+Live status and power, volume, mute and source controls were confirmed by the
+user on one Expert installation. High-volume operation has not been tested.
 
-Once readback is confirmed, a separate user-approved low-volume test is required
-before disabling read-only in integration Options. HA-host readback and controls
-have been verified for this installation. No existing Hub or Astrion mappings
-are changed here.
+## Install through HACS
 
-## Validate
+This is a **custom integration**, not a Home Assistant add-on. It is available
+as a HACS custom repository, not in the default HACS catalog.
 
-From this directory, using the existing POC Python environment:
+1. Open **HACS** and select **Custom repositories** from its menu.
+2. Add `https://github.com/RZomerman/ha-devialet-expert`.
+3. Select repository type **Integration**.
+4. Find **Devialet Expert** and download it.
+5. Restart Home Assistant.
+6. Open **Settings -> Devices & services -> Add integration**.
+7. Search for **Devialet Expert** and enter the amplifier's IPv4 address.
+
+Setup starts in **read-only mode**. Verify that power, input and volume readings
+match the amplifier before enabling commands.
+
+### Enable controls
+
+1. Open **Settings -> Devices & services -> Devialet Expert**.
+2. Open the integration's **Options / Configure** dialog.
+3. Disable **Read-only (no amplifier commands)** and save.
+4. The integration reloads automatically; no full HA restart is needed.
+
+Enabling controls does not send a command or change the current volume.
+Test at a low listening level first. To disable commands again, re-enable
+read-only mode.
+
+### Updates
+
+Download updates through HACS and restart Home Assistant to load the new Python
+code. HACS can install from this repository's default branch; a separate ZIP
+archive is not required.
+
+### Manual installation
+
+Copy the `custom_components/devialet_expert` directory from this repository into
+`/config/custom_components/` on the Home Assistant host. Restart Home Assistant,
+then add **Devialet Expert** through **Devices & services** as described above.
+Do not copy just the Python files: the translations and bundled artwork are
+part of the integration.
+
+## Entities and volume controls
+
+Both entities belong to the same Devialet device. Entity IDs depend on the
+amplifier name and any names already registered in Home Assistant. These examples
+use the observed device name `Devialet-WIFI`.
+
+| Entity | Example ID | Purpose |
+| --- | --- | --- |
+| Media player | `media_player.devialet_wifi` | Power, mute, input and standard HA volume controls |
+| Volume number | `number.devialet_wifi_volume` | Actual dB reading and dB slider |
+
+### True dB slider
+
+Open the device's **Volume** number entity to see its native slider:
+
+- Minimum: **-96.5 dB**
+- Maximum: **+30 dB**
+- Step: **0.5 dB**
+- Value: the amplifier's confirmed current volume, not an optimistic setting
+
+The number entity is unavailable while read-only mode is enabled. The media
+player still exposes readback in its attributes.
+
+Home Assistant's built-in media-player slider always displays percentages.
+The integration cannot change those labels. Its 0..100% position maps linearly
+to -96.5..+30 dB; it is **not** a percentage of amplifier output power.
+Use the separate number entity when you want dB values.
+
+For a direct dB service call:
+
+```yaml
+action: number.set_value
+target:
+  entity_id: number.devialet_wifi_volume
+data:
+  value: -50
+```
+
+Replace the entity ID with yours. Running this action changes the volume;
+the example does not run automatically.
+
+### Media-player attributes
+
+In addition to standard HA media-player attributes, the entity exposes:
+
+| Attribute | Meaning |
+| --- | --- |
+| `volume_db` | Actual amplifier volume in dB |
+| `active_input` | Current advertised input label |
+| `muted` | Current mute state |
+| `volume_min_db` | Minimum accepted volume command |
+| `volume_max_db` | Maximum accepted volume command |
+| `read_only` | Whether commands are disabled |
+| `host` | Configured amplifier IPv4 address |
+
+Physical readings outside the command range remain visible in `volume_db`;
+the standard media-player slider saturates at its nearest endpoint.
+
+The bundled product photo is the default entity artwork, including while powered
+off. Cards that honor `entity_picture` can display it without an external image
+host or separate dashboard setup. No Astrion or other remote bindings are
+created automatically.
+
+## Safety and state confirmation
+
+- Read-only mode blocks commands even when called directly through HA services.
+- Commands target only the configured host; packets from other hosts are ignored.
+- Volume commands reject nonfinite and out-of-range values. Accepted values are
+  quantized to 0.5 dB steps; a step beyond either endpoint raises an error.
+- **There is no -28 dB safety ceiling** as of version 0.1.2. Power-on and source
+  changes are not blocked based on the current volume.
+- Physical controls, other clients and source gain are not limited by this
+  integration.
+- Commands are serialized and wait up to **5 seconds** for a subsequent status
+  packet matching the requested value. Missing confirmation raises a visible
+  HA service error; state is not updated optimistically.
+- Confirmation means observed state, not a protocol acknowledgement. A timeout
+  does not prove the amplifier ignored the command; check its actual state
+  before retrying.
+- The identified protocol exposes on/off, not boot progress. No "powering up"
+  state is currently implemented. Power-on may take time.
+- After **10 seconds** without a valid broadcast, the entity becomes unavailable.
+  Stale state cannot be used to send commands.
+
+## Networking and troubleshooting
+
+### Integration retries setup or shows unavailable
+
+Home Assistant must receive the amplifier's broadcasts. Check:
+
+1. The amplifier is reachable, powered appropriately and connected to its network.
+2. The configured IPv4 address is correct and has not changed.
+3. UDP 45454 broadcasts reach the HA host. VLAN routing and firewall rules can
+   prevent broadcasts even when ping works.
+4. UDP 45455 can reach the amplifier for commands.
+5. No other listener, probe or devimote process on the same host owns UDP 45454.
+
+For Docker installations, host networking or suitable broadcast handling is
+needed. **A successful ping does not verify UDP broadcast delivery.**
+Review Home Assistant logs for `devialet_expert` errors.
+
+### No volume or input controls
+
+Check **Read-only** in the integration's options. In read-only mode the media
+player advertises no control features. For volume in dB rather than percentages,
+open the separate **Volume** number entity under the device.
+
+### A command reports a timeout
+
+The amplifier did not report the matching state within five seconds. Check its
+physical state and live HA readback before repeating the action. Firmware or
+network behavior may differ from the tested installation.
+
+### Reporting issues
+
+Open an [issue](https://github.com/RZomerman/ha-devialet-expert/issues) with your
+amplifier model, firmware, HA version, integration version and relevant logs.
+Describe expected and observed behavior. Remove credentials and any private
+network information you do not want to publish.
+
+## Development and validation
+
+From the repository root with Python installed:
 
 ```shell
 python -m unittest discover -s tests -v
@@ -87,15 +216,35 @@ python -m compileall -q custom_components
 python probe.py --host AMPLIFIER_IPV4
 ```
 
-`probe.py` listens only; it never sends a command. Unit tests use synthetic frames
-and fake transports, including the entire slider range and signed command encoding.
-Live readback and low-volume controls have been verified in HA; this does not
-validate high-volume operation.
+The passive probe listens only and **never sends amplifier commands**. Stop it
+before using another listener on the same host.
 
-Protocol attribution: Dimitris Lampridis / gnulabis devimote (GPL-3.0-or-later).
-This experimental integration is distributed under GPL-3.0-or-later.
-See `LICENSE.txt` for the license terms.
+The 23 offline tests cover status parsing, CRC validation, host filtering,
+read-only protection, command confirmation, repeated volume steps, the full
+slider range and signed volume encoding. Tests use synthetic status frames and
+fake transports. The optional upstream encoding-parity test requires an adjacent
+`devialet-poc/devimote/src` checkout and skips when it is absent.
 
-The bundled `brand/expert.png` product image was supplied by the repository
-owner with permission to redistribute it. It is not covered by the code's GPL
-license; rights to the image remain with its respective owner.
+Known wire details:
+
+- CRC16 CCITT-FALSE with seed `0xFFFF`.
+- Observed 345-byte and documented 512-byte status frames are supported.
+- Volume readback is `(raw - 195) / 2` dB, calibrated against physical readings.
+- Commands use devimote's wire encoding, including its unusual volume encoding.
+- Zero and positive-volume command bytes are checked offline against devimote.
+  No high-volume commands were sent to validate these changes.
+
+Offline encoding tests are not proof of hardware acceptance. HA runtime
+validation and low-volume physical tests remain important for other installations.
+
+## Attribution and license
+
+Protocol implementation based on work by **Dimitris Lampridis / gnulabis** in
+[devimote](https://github.com/gnulabis/devimote).
+The integration code is distributed under **GPL-3.0-or-later**; see
+[LICENSE.txt](LICENSE.txt).
+
+The bundled [product image](custom_components/devialet_expert/brand/expert.png)
+was supplied by the repository owner with permission to redistribute it. It is
+not covered by the code's GPL license; image rights remain with its respective
+owner. Devialet names and trademarks belong to their respective owners.
