@@ -1,0 +1,26 @@
+{
+  "title": "Devialet Expert",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Devialet Expert",
+        "description": "Expert non-Pro UDP protocol (experimental). Starts read-only. HA must receive broadcasts on UDP 45454 from this IPv4 address.",
+        "data": {"host": "Amplifier IPv4 address"}
+      }
+    },
+    "error": {"invalid_host": "Enter a unicast IPv4 address."},
+    "abort": {
+      "single_instance_allowed": "Only one amplifier is supported because the listener owns UDP 45454.",
+      "already_configured": "This amplifier is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Amplifier safety",
+        "description": "Leave read-only enabled until command encoding is physically verified. Controls are experimental. The volume command ceiling is permanently -28 dB. Commands are confirmed only by subsequent broadcasts.",
+        "data": {"read_only": "Read-only (no amplifier commands)"}
+      }
+    }
+  }
+}
