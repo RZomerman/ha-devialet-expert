@@ -148,9 +148,18 @@ the standard media-player slider saturates at its nearest endpoint.
 
 Artwork changes automatically: the full amplifier photo when confirmed ON,
 the close-up when OFF, and the Devialet logo while a HA power-on request awaits
-confirmation. Cards that honor `entity_picture` can display these images without
-an external image host or separate dashboard setup. No Astrion or other remote
-bindings are created automatically.
+confirmation. These images are exposed through `entity_picture` and served
+locally.
+
+**Standard media-card limitation:** Home Assistant's built-in media-control card
+deliberately hides artwork while the entity is OFF. Because startup preserves
+the last confirmed OFF state, that card also hides the boot logo until ON is
+confirmed. Providing an image in the integration cannot override this frontend
+behavior. Use a picture-aware dashboard card if you want the OFF and pending
+startup pictures visible. The integration does not misreport power as ON to
+force the standard card to show a picture.
+
+No Astrion or other remote bindings are created automatically.
 
 ## Safety and state confirmation
 
@@ -176,7 +185,8 @@ bindings are created automatically.
   While the HA request is pending, control features and the dB slider are
   disabled, and additional commands are rejected rather than queued.
 - Broadcast silence during a pending power-on is tolerated for its 60-second
-  window so the logo remains visible. A network error still fails immediately.
+  window so the pending entity and logo attribute remain available. A network
+  error still fails immediately.
   Success, timeout, cancellation or unloading clears the pending indicator.
 - Outside that pending startup window, **10 seconds** without a valid broadcast
   makes the entity unavailable. Stale state cannot be used to send commands.
@@ -249,6 +259,11 @@ Known wire details:
 
 Offline encoding tests are not proof of hardware acceptance. HA runtime
 validation and low-volume physical tests remain important for other installations.
+
+Version 0.1.4 was verified with an approved HA off/on cycle: startup confirmation
+took about 15 seconds without the former five-second error. The OFF, pending
+startup and ON artwork attributes changed correctly; volume stayed at -40 dB.
+The built-in media-control card's OFF artwork limitation was also verified.
 
 ## Attribution and license
 
