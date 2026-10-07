@@ -3,7 +3,6 @@
 from homeassistant.components.media_player import (
     MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState,
 )
-from homeassistant.components.media_player.const import MediaPlayerDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -26,7 +25,7 @@ class DevialetPlayer(MediaPlayerEntity):
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = None
-    _attr_device_class = MediaPlayerDeviceClass.RECEIVER
+    _attr_device_class = "receiver"
 
     def __init__(self, client: Client, entry: ConfigEntry) -> None:
         self.client = client
