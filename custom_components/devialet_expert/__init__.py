@@ -14,12 +14,17 @@ from .client import Client
 DOMAIN = "devialet_expert"
 PLATFORMS = [Platform.MEDIA_PLAYER, Platform.NUMBER]
 ARTWORK_URL = "/devialet_expert/expert.png"
+OFF_ARTWORK_URL = "/devialet_expert/expert-off.png"
+BOOT_ARTWORK_URL = "/devialet_expert/expert-boot.png"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths([
-        StaticPathConfig(
-            ARTWORK_URL, str(Path(__file__).parent / "brand" / "expert.png"), True
+        StaticPathConfig(url, str(Path(__file__).parent / "brand" / name), True)
+        for url, name in (
+            (ARTWORK_URL, "expert.png"),
+            (OFF_ARTWORK_URL, "expert-off.png"),
+            (BOOT_ARTWORK_URL, "expert-boot.png"),
         )
     ])
     return True

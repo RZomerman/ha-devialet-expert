@@ -12,6 +12,7 @@ from .protocol import (
 _LOGGER = logging.getLogger(__name__)
 STALE_SECONDS = 10.0
 CONFIRM_SECONDS = 5.0
+POWER_ON_SECONDS = 60.0
 
 
 class CommandError(Exception):
@@ -29,6 +30,7 @@ class Client(asyncio.DatagramProtocol):
         self.revision = 0
         self.sequence = 0
         self.network_error: str | None = None
+        self.powering_up = False
         self._lock = asyncio.Lock()
         self._received = asyncio.Event()
         self._expiry: asyncio.TimerHandle | None = None
@@ -107,6 +109,8 @@ class Client(asyncio.DatagramProtocol):
         self._received.set()
 
     async def command(self, kind: str, value: bool | int | float) -> None:
+        if self.powering_up:
+            raise CommandError("Power-on is still awaiting amplifier confirmation")
         async with self._lock:
             if self.read_only:
                 raise CommandError("Controls are disabled (read-only mode)")
@@ -153,11 +157,31 @@ class Client(asyncio.DatagramProtocol):
                     self.sequence = (self.sequence + 1) % 512
             except (OSError, ValueError) as err:
                 raise CommandError(f"Cannot send Devialet command: {err}") from err
-            async with asyncio.timeout(CONFIRM_SECONDS):
-                while True:
-                    self._received.clear()
-                    if not self.available:
-                        raise CommandError("Amplifier disconnected during command")
-                    if self.revision > revision and self.status and matches(self.status):
-                        return
-                    await self._received.wait()
+            power_on = kind == "power" and expected is True
+            timeout = POWER_ON_SECONDS if power_on else CONFIRM_SECONDS
+            if power_on:
+                self.powering_up = True
+                self.changed()
+            try:
+                async with asyncio.timeout(timeout):
+                    while True:
+                        self._received.clear()
+                        if self.transport is None or self.network_error is not None:
+                            raise CommandError("Amplifier disconnected during command")
+                        # Booting may interrupt broadcasts; only fresh ON confirms it.
+                        if not power_on and not self.available:
+                            raise CommandError("Amplifier disconnected during command")
+                        if (
+                            self.available and self.revision > revision
+                            and self.status and matches(self.status)
+                        ):
+                            return
+                        await self._received.wait()
+            except TimeoutError as err:
+                raise CommandError(
+                    f"No confirming Devialet status within {timeout:g} seconds"
+                ) from err
+            finally:
+                if power_on:
+                    self.powering_up = False
+                    self.changed()

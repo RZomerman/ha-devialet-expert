@@ -204,11 +204,85 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         old = client.CONFIRM_SECONDS
         client.CONFIRM_SECONDS = 0.01
         try:
-            with self.assertRaises(TimeoutError):
+            with self.assertRaisesRegex(client.CommandError, "0.01 seconds"):
                 await self.amp.command("mute", True)
             self.assertFalse(self.amp.status.muted)
         finally:
             client.CONFIRM_SECONDS = old
+
+    async def test_power_on_waits_past_normal_timeout_and_stale_status(self):
+        self.assertEqual(client.POWER_ON_SECONDS, 60)
+        self.receive(power=False)
+        old = client.CONFIRM_SECONDS
+        client.CONFIRM_SECONDS = 0.001
+        try:
+            task = asyncio.create_task(self.amp.command("power", True))
+            await asyncio.sleep(0)
+            self.assertTrue(self.amp.powering_up)
+            self.amp.received_at -= 11
+            self.amp._received.set()
+            await asyncio.sleep(0.01)
+            self.assertFalse(task.done())
+            self.assertFalse(self.amp.available)
+            for kind, value in (("power", True), ("power", False), ("volume", -50),
+                                ("mute", True), ("source", 2)):
+                with self.assertRaisesRegex(client.CommandError, "awaiting"):
+                    await self.amp.command(kind, value)
+            self.assertEqual(len(self.transport.sent), 4)
+            self.receive(power=False)
+            await asyncio.sleep(0)
+            self.assertFalse(task.done())
+            self.receive(power=True)
+            await task
+            self.assertFalse(self.amp.powering_up)
+            self.assertTrue(self.amp.available)
+        finally:
+            client.CONFIRM_SECONDS = old
+
+    async def test_power_on_timeout_clears_pending(self):
+        self.receive(power=False)
+        old = client.POWER_ON_SECONDS
+        client.POWER_ON_SECONDS = 0.01
+        try:
+            with self.assertRaisesRegex(client.CommandError, "0.01 seconds"):
+                await self.amp.command("power", True)
+            self.assertFalse(self.amp.powering_up)
+            self.assertFalse(self.amp.status.power)
+            # A later physical ON is still reflected after timeout.
+            self.receive(power=True)
+            self.assertTrue(self.amp.status.power)
+        finally:
+            client.POWER_ON_SECONDS = old
+
+    async def test_power_on_network_failure_clears_pending(self):
+        self.receive(power=False)
+        task = asyncio.create_task(self.amp.command("power", True))
+        await asyncio.sleep(0)
+        self.amp.error_received(OSError("network failed"))
+        with self.assertRaisesRegex(client.CommandError, "disconnected"):
+            await task
+        self.assertFalse(self.amp.powering_up)
+
+    async def test_power_on_cancellation_and_close_clear_pending(self):
+        for close in (False, True):
+            with self.subTest(close=close):
+                self.receive(power=False)
+                task = asyncio.create_task(self.amp.command("power", True))
+                await asyncio.sleep(0)
+                if close:
+                    self.amp.close()
+                    with self.assertRaises(client.CommandError):
+                        await task
+                else:
+                    task.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                self.assertFalse(self.amp.powering_up)
+
+    async def test_already_on_does_not_start_pending(self):
+        await self.amp.command("power", True)
+        self.assertFalse(self.amp.powering_up)
+        self.assertEqual(self.transport.sent, [])
 
     async def test_repeated_steps_serialize_and_use_latest_volume(self):
         tasks = [asyncio.create_task(self.amp.command("step", 0.5)) for _ in range(3)]

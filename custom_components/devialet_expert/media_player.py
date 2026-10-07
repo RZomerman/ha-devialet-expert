@@ -10,7 +10,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ARTWORK_URL, DOMAIN
+from . import ARTWORK_URL, BOOT_ARTWORK_URL, DOMAIN, OFF_ARTWORK_URL
 from .client import Client, CommandError
 from .protocol import MAX_DB, MIN_DB, STEP_DB, db_to_level, level_to_db
 
@@ -45,16 +45,21 @@ class DevialetPlayer(MediaPlayerEntity):
 
     @property
     def available(self):
-        return self.client.available
+        return self.client.available or (
+            self.client.powering_up and self.client.transport is not None
+            and self.client.network_error is None
+        )
 
     @property
     def entity_picture(self) -> str:
-        """Use amplifier artwork even when there is no playing media."""
-        return ARTWORK_URL
+        """Choose artwork from confirmed power and pending startup."""
+        if self.client.powering_up:
+            return BOOT_ARTWORK_URL
+        return ARTWORK_URL if self.client.status and self.client.status.power else OFF_ARTWORK_URL
 
     @property
     def supported_features(self):
-        if self.client.read_only:
+        if self.client.read_only or self.client.powering_up:
             return MediaPlayerEntityFeature(0)
         return (
             MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
@@ -93,6 +98,11 @@ class DevialetPlayer(MediaPlayerEntity):
             "volume_max_db": MAX_DB,
             "read_only": self.client.read_only,
             "host": self.client.host,
+            "powering_up": self.client.powering_up,
+            "startup_status": (
+                "Powering up - awaiting confirmation"
+                if self.client.powering_up else None
+            ),
         }
 
     async def _command(self, kind, value):

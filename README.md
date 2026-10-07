@@ -18,13 +18,13 @@ package is required.
 
 | Feature | Behavior |
 | --- | --- |
-| Power | Switch the amplifier on or off; state follows its broadcasts |
+| Power | Switch on/off; power-on allows up to 60 seconds for confirmation |
 | Volume | Full -96.5 to +30 dB range, in 0.5 dB steps |
 | dB slider | Separate native number entity with actual dB values |
 | Mute | Read and control mute state |
 | Inputs | Select inputs advertised by the amplifier |
 | Live status | Power, input, mute and volume from CRC-valid UDP broadcasts |
-| Artwork | Bundled amplifier picture served locally by Home Assistant |
+| Artwork | Local pictures for ON, OFF and a pending HA power-on request |
 | Read-only mode | Enabled by default; blocks all amplifier commands |
 
 This is an amplifier/receiver integration, not a playback source. It does not
@@ -140,14 +140,17 @@ In addition to standard HA media-player attributes, the entity exposes:
 | `volume_max_db` | Maximum accepted volume command |
 | `read_only` | Whether commands are disabled |
 | `host` | Configured amplifier IPv4 address |
+| `powering_up` | Whether a HA power-on request is awaiting confirmation |
+| `startup_status` | Pending startup description, otherwise empty |
 
 Physical readings outside the command range remain visible in `volume_db`;
 the standard media-player slider saturates at its nearest endpoint.
 
-The bundled product photo is the default entity artwork, including while powered
-off. Cards that honor `entity_picture` can display it without an external image
-host or separate dashboard setup. No Astrion or other remote bindings are
-created automatically.
+Artwork changes automatically: the full amplifier photo when confirmed ON,
+the close-up when OFF, and the Devialet logo while a HA power-on request awaits
+confirmation. Cards that honor `entity_picture` can display these images without
+an external image host or separate dashboard setup. No Astrion or other remote
+bindings are created automatically.
 
 ## Safety and state confirmation
 
@@ -159,16 +162,24 @@ created automatically.
   changes are not blocked based on the current volume.
 - Physical controls, other clients and source gain are not limited by this
   integration.
-- Commands are serialized and wait up to **5 seconds** for a subsequent status
-  packet matching the requested value. Missing confirmation raises a visible
+- Commands are serialized and wait up to **5 seconds**, or **60 seconds for
+  power-on**, for a subsequent status packet matching the requested value.
+  Missing confirmation raises a visible
   HA service error; state is not updated optimistically.
 - Confirmation means observed state, not a protocol acknowledgement. A timeout
   does not prove the amplifier ignored the command; check its actual state
   before retrying.
-- The identified protocol exposes on/off, not boot progress. No "powering up"
-  state is currently implemented. Power-on may take time.
-- After **10 seconds** without a valid broadcast, the entity becomes unavailable.
-  Stale state cannot be used to send commands.
+- The identified protocol exposes on/off, not boot progress. **Powering up**
+  indicates a pending HA command, not hardware-reported progress or readiness.
+  The power state stays at its last confirmed value until fresh ON is received.
+  Startup begun with a physical remote cannot be identified before that broadcast.
+  While the HA request is pending, control features and the dB slider are
+  disabled, and additional commands are rejected rather than queued.
+- Broadcast silence during a pending power-on is tolerated for its 60-second
+  window so the logo remains visible. A network error still fails immediately.
+  Success, timeout, cancellation or unloading clears the pending indicator.
+- Outside that pending startup window, **10 seconds** without a valid broadcast
+  makes the entity unavailable. Stale state cannot be used to send commands.
 
 ## Networking and troubleshooting
 
@@ -195,7 +206,8 @@ open the separate **Volume** number entity under the device.
 
 ### A command reports a timeout
 
-The amplifier did not report the matching state within five seconds. Check its
+The amplifier did not report the matching state within five seconds (60 seconds
+for power-on). Check its
 physical state and live HA readback before repeating the action. Firmware or
 network behavior may differ from the tested installation.
 
@@ -219,9 +231,10 @@ python probe.py --host AMPLIFIER_IPV4
 The passive probe listens only and **never sends amplifier commands**. Stop it
 before using another listener on the same host.
 
-The 23 offline tests cover status parsing, CRC validation, host filtering,
+The offline tests cover status parsing, CRC validation, host filtering,
 read-only protection, command confirmation, repeated volume steps, the full
-slider range and signed volume encoding. Tests use synthetic status frames and
+slider range, signed volume encoding and startup confirmation/cleanup.
+Tests use synthetic status frames and
 fake transports. The optional upstream encoding-parity test requires an adjacent
 `devialet-poc/devimote/src` checkout and skips when it is absent.
 
@@ -244,7 +257,7 @@ Protocol implementation based on work by **Dimitris Lampridis / gnulabis** in
 The integration code is distributed under **GPL-3.0-or-later**; see
 [LICENSE.txt](LICENSE.txt).
 
-The bundled [product image](custom_components/devialet_expert/brand/expert.png)
-was supplied by the repository owner with permission to redistribute it. It is
-not covered by the code's GPL license; image rights remain with its respective
-owner. Devialet names and trademarks belong to their respective owners.
+The bundled product photographs and logo were supplied by the repository owner
+with permission to redistribute them. They are not covered by the code's GPL
+license; image rights remain with their respective owner. Devialet names and
+trademarks belong to their respective owners.

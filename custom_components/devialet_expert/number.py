@@ -45,7 +45,10 @@ class DevialetVolume(NumberEntity):
 
     @property
     def available(self) -> bool:
-        return self.client.available and not self.client.read_only
+        return (
+            self.client.available and not self.client.read_only
+            and not self.client.powering_up
+        )
 
     @property
     def native_value(self) -> float | None:
