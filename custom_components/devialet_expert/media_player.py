@@ -10,7 +10,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DOMAIN
+from . import ARTWORK_URL, DOMAIN
 from .client import Client, CommandError
 from .protocol import MAX_DB, MIN_DB, STEP_DB, db_to_level, level_to_db
 
@@ -46,6 +46,11 @@ class DevialetPlayer(MediaPlayerEntity):
     @property
     def available(self):
         return self.client.available
+
+    @property
+    def entity_picture(self) -> str:
+        """Use amplifier artwork even when there is no playing media."""
+        return ARTWORK_URL
 
     @property
     def supported_features(self):

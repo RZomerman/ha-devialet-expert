@@ -33,6 +33,12 @@ the default branch. Tagged GitHub releases are recommended after HA validation.
   The current dB reading is available in `volume_db`; percentages are a linear
   position in this range, not a percentage of amplifier output power.
   Readings outside this range remain visible in `volume_db`; the slider saturates.
+- A separate **Volume** number entity provides a native **dB slider**, from
+  -96.5 to +30 dB in 0.5 dB steps. Use its entity details or `number.set_value`
+  with a dB value directly. HA's built-in media-player slider still displays
+  percentages; its labels cannot be changed by the integration.
+  The number entity shares confirmed amplifier readback with the media player
+  and is unavailable while read-only mode is enabled.
 - Every command path rejects out-of-range/nonfinite values. Volume steps are 0.5 dB.
 - No optimistic state updates. A command waits up to 5 seconds for subsequent
   status matching the requested value, or raises a visible HA service error.
@@ -48,6 +54,9 @@ the default branch. Tagged GitHub releases are recommended after HA validation.
   no high-volume commands were sent during the full-range update.
   Unit tests of encoding alone are NOT proof of device acceptance.
 - No play/pause/seek features: the amplifier is a receiver, not a playback source.
+- The media-player entity includes bundled Devialet Expert artwork by default,
+  including while powered off. HA serves the image locally; no external image
+  host or dashboard customization is required.
 - One entry/listener; do not run another process bound to UDP 45454 alongside it.
 
 ## Install
@@ -86,3 +95,7 @@ validate high-volume operation.
 Protocol attribution: Dimitris Lampridis / gnulabis devimote (GPL-3.0-or-later).
 This experimental integration is distributed under GPL-3.0-or-later.
 See `LICENSE.txt` for the license terms.
+
+The bundled `brand/expert.png` product image was supplied by the repository
+owner with permission to redistribute it. It is not covered by the code's GPL
+license; rights to the image remain with its respective owner.

@@ -1,14 +1,28 @@
 """Devialet Expert integration; passive by default."""
 
+from pathlib import Path
+
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.typing import ConfigType
 
 from .client import Client
 
 DOMAIN = "devialet_expert"
-PLATFORMS = [Platform.MEDIA_PLAYER]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.NUMBER]
+ARTWORK_URL = "/devialet_expert/expert.png"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            ARTWORK_URL, str(Path(__file__).parent / "brand" / "expert.png"), True
+        )
+    ])
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
