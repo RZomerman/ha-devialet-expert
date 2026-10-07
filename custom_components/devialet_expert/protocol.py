@@ -7,8 +7,8 @@ import struct
 
 STATUS_PORT = 45454
 COMMAND_PORT = 45455
-MIN_DB = -97.5
-MAX_DB = -28.0
+MIN_DB = -96.5
+MAX_DB = 30.0
 STEP_DB = 0.5
 
 
@@ -81,12 +81,15 @@ def db_to_level(value: float) -> float:
 
 def volume_word(value: float) -> int:
     """Reproduce devimote's unusual encoding, not an assumed IEEE half float."""
-    magnitude = abs(quantize_db(value))
+    value = quantize_db(value)
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 0
     word = 0x3F00
     while magnitude > 0.5:
         word += 256 >> math.ceil(1 + math.log2(magnitude))
         magnitude -= 0.5
-    return word | 0x8000
+    return word | (0x8000 if value < 0 else 0)
 
 
 def command_packet(kind: str, value: bool | int | float, sequence: int) -> bytes:

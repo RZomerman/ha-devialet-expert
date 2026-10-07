@@ -1,7 +1,7 @@
 {
   "domain": "devialet_expert",
   "name": "Devialet Expert",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "config_flow": true,
   "documentation": "https://github.com/rzomerman/ha-devialet-expert",
   "issue_tracker": "https://github.com/rzomerman/ha-devialet-expert/issues",

@@ -5,7 +5,7 @@ from collections.abc import Callable
 import logging
 
 from .protocol import (
-    COMMAND_PORT, MAX_DB, STATUS_PORT, Status, command_packet, parse_status,
+    COMMAND_PORT, STATUS_PORT, Status, command_packet, parse_status,
     quantize_db,
 )
 
@@ -129,8 +129,6 @@ class Client(asyncio.DatagramProtocol):
             elif kind in ("power", "mute"):
                 if not isinstance(value, bool):
                     raise CommandError("Power/mute require a boolean")
-                if kind == "power" and value and status.volume_db > MAX_DB:
-                    raise CommandError("Power-on refused: reported volume exceeds -28 dB")
                 expected = value
                 matches = (
                     (lambda s: s.power == expected) if kind == "power"
@@ -139,8 +137,6 @@ class Client(asyncio.DatagramProtocol):
             elif kind == "source":
                 if value not in dict(status.inputs) or isinstance(value, bool):
                     raise CommandError("Input is not advertised by the amplifier")
-                if status.volume_db > MAX_DB:
-                    raise CommandError("Source change refused: volume exceeds -28 dB")
                 expected = value
                 matches = lambda s: s.channel == expected
             else:

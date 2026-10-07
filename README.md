@@ -2,7 +2,7 @@
 
 Native `media_player` for the pre-Core-Infinity Expert UDP protocol, based on
 [devimote](https://github.com/gnulabis/devimote). No cloud, GUI or Python package
-dependency. Not yet installed in HA.
+dependency. Installed and validated in Home Assistant through HACS.
 
 ## HACS installation
 
@@ -29,17 +29,23 @@ the default branch. Tagged GitHub releases are recommended after HA validation.
   documented 512-byte frames are accepted. Corrupt/short frames are logged.
 - State becomes unavailable after 10 seconds without valid broadcasts.
 - Readback is `(raw - 195) / 2` dB, calibrated from the user's physical readings.
-- HA's 0..1 slider maps **-97.5..-28 dB**, not the amplifier's full range.
-  Physical volume above -28 dB is still reported in `volume_db`; the slider saturates.
+- HA's 0..1 slider maps **-96.5..+30 dB** across the full requested range.
+  The current dB reading is available in `volume_db`; percentages are a linear
+  position in this range, not a percentage of amplifier output power.
+  Readings outside this range remain visible in `volume_db`; the slider saturates.
 - Every command path rejects out-of-range/nonfinite values. Volume steps are 0.5 dB.
 - No optimistic state updates. A command waits up to 5 seconds for subsequent
   status matching the requested value, or raises a visible HA service error.
   This is observed-state confirmation, not a protocol acknowledgement.
-- Power-on and source changes are refused when reported volume exceeds -28 dB.
-  This software cannot limit physical controls, other clients or source gain.
+- There is **no reduced-volume safety ceiling**. Power-on and source changes
+  are not blocked based on the current volume. High volume can damage speakers
+  or hearing; start low and increase carefully. The earlier -28 dB ceiling
+  was removed in version 0.1.2 at the user's request.
 - Writes are experimental. A separately approved live volume test with this client
   confirmed -40.0 -> -40.5 dB from a subsequent CRC-valid status packet.
-  Power, mute and source writes have not been physically validated.
+  The user subsequently confirmed HA power, volume, mute and source controls
+  work. Zero and positive-volume encoding is checked offline against devimote;
+  no high-volume commands were sent during the full-range update.
   Unit tests of encoding alone are NOT proof of device acceptance.
 - No play/pause/seek features: the amplifier is a receiver, not a playback source.
 - One entry/listener; do not run another process bound to UDP 45454 alongside it.
@@ -58,9 +64,9 @@ successfully read Devialet-WIFI, Apple TV and -40.0 dB from a 345-byte packet
 after an initial timeout. After the approved quieter test it reported -40.5 dB.
 
 Once readback is confirmed, a separate user-approved low-volume test is required
-before disabling read-only in integration Options. The local client's approved
-volume test passed, but HA-host readback must still be verified. Remote bindings should be
-added only after that test; no existing Hub or Astrion mappings are changed here.
+before disabling read-only in integration Options. HA-host readback and controls
+have been verified for this installation. No existing Hub or Astrion mappings
+are changed here.
 
 ## Validate
 
@@ -73,7 +79,9 @@ python probe.py --host AMPLIFIER_IPV4
 ```
 
 `probe.py` listens only; it never sends a command. Unit tests use synthetic frames
-and fake transports. Full HA runtime validation is still required after installation.
+and fake transports, including the entire slider range and signed command encoding.
+Live readback and low-volume controls have been verified in HA; this does not
+validate high-volume operation.
 
 Protocol attribution: Dimitris Lampridis / gnulabis devimote (GPL-3.0-or-later).
 This experimental integration is distributed under GPL-3.0-or-later.

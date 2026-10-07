@@ -45,7 +45,7 @@ def frame(length=345, db=-37, muted=False, power=True, channel=6, names=None):
 class ProtocolTests(unittest.TestCase):
     def test_both_frame_sizes_and_calibration(self):
         for length in (345, 512):
-            for db in (-37, -36.5, -31):
+            for db in (-96.5, -37, -36.5, -31, -0.5, 0, 0.5, 30):
                 with self.subTest(length=length, db=db):
                     status = protocol.parse_status(frame(length, db))
                     self.assertEqual(status.volume_db, db)
@@ -71,22 +71,37 @@ class ProtocolTests(unittest.TestCase):
         status = protocol.parse_status(frame(names={2: "Same", 6: "Same"}))
         self.assertEqual(status.inputs, ((2, "Same [2]"), (6, "Same [6]")))
 
-    def test_ceiling_and_invalid_volume(self):
-        for value in (-27.5, 0, 20, -98, math.nan, math.inf, -math.inf):
+    def test_range_and_invalid_volume(self):
+        for value in (30.5, -97, -98, math.nan, math.inf, -math.inf):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 protocol.command_packet("volume", value, 0)
-        self.assertEqual(protocol.level_to_db(1), -28)
-        self.assertEqual(protocol.level_to_db(0), -97.5)
+        self.assertEqual(protocol.level_to_db(1), 30)
+        self.assertEqual(protocol.level_to_db(0), -96.5)
+        self.assertEqual(protocol.db_to_level(-97.5), 0)
+        self.assertEqual(protocol.db_to_level(31), 1)
         for level in (-0.1, 1.1, math.nan, math.inf):
             with self.assertRaises(ValueError):
                 protocol.level_to_db(level)
 
-    def test_all_slider_values_are_safe(self):
+    def test_all_slider_values_are_in_range(self):
         for index in range(1001):
             value = protocol.level_to_db(index / 1000)
-            self.assertLessEqual(value, -28)
-            self.assertGreaterEqual(value, -97.5)
+            self.assertLessEqual(value, 30)
+            self.assertGreaterEqual(value, -96.5)
             self.assertEqual(value * 2, int(value * 2))
+
+    def test_full_range_slider_roundtrip(self):
+        for step in range(-193, 61):
+            db = step / 2
+            self.assertEqual(protocol.level_to_db(protocol.db_to_level(db)), db)
+
+    def test_zero_and_signed_volume_encoding(self):
+        self.assertEqual(protocol.volume_word(0), 0)
+        self.assertEqual(protocol.volume_word(-0.5), 0xBF00)
+        self.assertEqual(protocol.volume_word(0.5), 0x3F00)
+        for step in range(1, 61):
+            db = step / 2
+            self.assertEqual(protocol.volume_word(-db), protocol.volume_word(db) | 0x8000)
 
     def test_upstream_volume_encoding_parity(self):
         upstream = ROOT.parent / "devialet-poc" / "devimote" / "src"
@@ -95,9 +110,10 @@ class ProtocolTests(unittest.TestCase):
         sys.path.insert(0, str(upstream))
         from pydevialet_expert_nonpro import DeviMoteBackEnd
         backend = DeviMoteBackEnd(host="192.0.2.1")
+        backend.VOLUME_LIMIT = 30
         captured = []
         backend._send_command = lambda packet: captured.append(bytes(packet))
-        for step in range(-195, -55):
+        for step in range(-193, 61):
             db = step / 2
             backend.set_volume(db)
             packet = protocol.command_packet("volume", db, 0)
@@ -208,15 +224,38 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
                 protocol.command_packet("volume", expected, 0)[8:10],
             )
 
-    async def test_ceiling_rejects_steps_and_power_source_safety(self):
-        self.receive(db=-28)
-        with self.assertRaises(client.CommandError):
-            await self.amp.command("step", 0.5)
-        self.receive(db=-20, power=False)
-        for kind, value in (("power", True), ("source", 2), ("volume", -27)):
+    async def test_range_rejects_invalid_steps_and_volumes(self):
+        for db, step in ((30, 0.5), (-96.5, -0.5)):
+            self.receive(db=db)
             with self.assertRaises(client.CommandError):
-                await self.amp.command(kind, value)
+                await self.amp.command("step", step)
+        for db in (-97, 30.5, math.nan, math.inf):
+            with self.assertRaises(client.CommandError):
+                await self.amp.command("volume", db)
         self.assertEqual(self.transport.sent, [])
+
+    async def test_zero_and_positive_volume_commands_confirmed(self):
+        for db in (0, 0.5, 30, -96.5):
+            task = asyncio.create_task(self.amp.command("volume", db))
+            await asyncio.sleep(0)
+            self.assertFalse(task.done())
+            self.assertEqual(self.transport.sent[-1][0][8:10],
+                             protocol.command_packet("volume", db, 0)[8:10])
+            self.receive(db=db)
+            await task
+        self.assertEqual(len(self.transport.sent), 16)
+
+    async def test_power_and_source_above_old_ceiling(self):
+        self.receive(db=30, power=False)
+        task = asyncio.create_task(self.amp.command("power", True))
+        await asyncio.sleep(0)
+        self.receive(db=30, power=True)
+        await task
+        task = asyncio.create_task(self.amp.command("source", 2))
+        await asyncio.sleep(0)
+        self.receive(db=30, channel=2)
+        await task
+        self.assertEqual(len(self.transport.sent), 8)
 
     async def test_invalid_input_and_noop(self):
         with self.assertRaises(client.CommandError):

@@ -18,7 +18,7 @@
     "step": {
       "init": {
         "title": "Amplifier safety",
-        "description": "Leave read-only enabled until command encoding is physically verified. Controls are experimental. The volume command ceiling is permanently -28 dB. Commands are confirmed only by subsequent broadcasts.",
+        "description": "Leave read-only enabled until command encoding is physically verified. Controls are experimental. Volume spans the full -96.5 to +30 dB range, with no reduced-volume safety ceiling. High volume can damage speakers or hearing. Commands are confirmed only by subsequent broadcasts.",
         "data": {"read_only": "Read-only (no amplifier commands)"}
       }
     }
